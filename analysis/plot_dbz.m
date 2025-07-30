@@ -1,0 +1,53 @@
+% Read and diplay radar data
+
+clear all;
+close all;
+
+addpath(genpath('~/git/lrose-test/bomb_snowstorm/analysis/utils/'));
+
+infile='/scr/cirrus1/rsfdata/projects/nexrad/cfradial/kftg.longprt.regr/20220329/cfrad.20220329_175334.757_to_20220329_175405.283_KFTG_SUR.nc';
+
+outstr='kftg_20220329_175334_';
+
+figdir=['/scr/cirrus1/rsfdata/projects/nexrad/figures/kftg/'];
+
+data=[];
+
+data.DBZ=[];
+
+data=read_spol(infile,data);
+
+
+%% Plot preparation
+
+ang_p = deg2rad(90-data.azimuth);
+
+angMat=repmat(ang_p,size(data.range,1),1);
+
+XX = (data.range.*cos(angMat));
+YY = (data.range.*sin(angMat));
+
+%% Z
+close all
+
+figure('Position',[200 500 600 500],'DefaultAxesFontSize',12);
+
+s1=subplot(1,1,1);
+surf(XX,YY,data.DBZ,'edgecolor','none');
+view(2);
+caxis([-10 65])
+title('DBZ (dBZ)')
+xlabel('km');
+ylabel('km');
+s1.Colormap=dbz_default2;
+cb1=colorbar('XTick',-10:3:65);
+
+grid on
+box on
+
+xlim([-200,200]);
+ylim([-200,200]);
+daspect(s1,[1 1 1]);
+
+print([figdir,outstr,'DBZ_zoom200.png'],'-dpng','-r0');
+
