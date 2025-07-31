@@ -1,16 +1,33 @@
 % Read and diplay radar data
+% This script can read cfRadial files and fortran output tables from John.
+% The variables are read and plotted.
+
+%% IMPORTANT
+
+% The files need to be specified in the file
+% "plotFiles_indVars_cases2425.txt"
+% Each line in this file needs to have the following columns:
+% 1. Full path to data file
+% 2. Desired output name (will be used for directory and output file name)
+% 3.-6. X and Y coordinates of first zoom window
+% 7.-10. X and Y coordinates of second zoom window
+% 11. "table" or "nc" indicating the data file type
+
+% I suggest continuing the list of files instead of deleting. This way old
+% work can be recreated. You can start the foor loop at the desired new
+% file.
+%%
 
 clear all;
 close all;
 
-addpath(genpath('~/git/lrose-test/bomb_snowstorm/analysis/utils/'));
+addpath(genpath('~/git/lrose-nexrad/analysis/utils/'));
 
-maxRange=[];
+maxRange=[]; % If data should only be processed up to a specified maximum range. Set [] otherwise.
 
-showPlot='off';
+showPlot='off'; % 'on' if plot windows should display on your sceen. 'off' to only save plots.
 
-tripToSnr=0;
-tripToCnr=1;
+censor99=1; % 1 if -99 values in John's tables should be converted to nans. Otherwise 0.
 
 %% Loop through cases
 
@@ -18,8 +35,7 @@ fileID = fopen('plotFiles_indVars_cases2425.txt');
 inAll=textscan(fileID,'%s %s %f %f %f %f %f %f %f %f %s %s');
 fclose(fileID);
 
-for aa=62:size(inAll{1,1},1)
-%for aa=24:43
+for aa=82:size(inAll{1,1},1)
 
     infile=inAll{1,1}(aa);
 
@@ -46,13 +62,14 @@ for aa=62:size(inAll{1,1},1)
     elseif strcmp(fileType{:},'table')
         data=readDataTables(infile{:},' ');
         data.RHOHV_F=data.RHOHV_NNC_F;
-        if tripToSnr
-            data.SNR=data.TRIP;
-            data=rmfield(data,'TRIP');
-        end
-        if tripToCnr
-            data.CNR=data.TRIP;
-            data=rmfield(data,'TRIP');
+
+        if censor99
+            dataFields=fields(data);
+            for ll=1:length(dataFields)
+                if size(data.(dataFields{ll}),1)==length(data.azimuth) & size(data.(dataFields{ll}),2)==length(data.range)
+                    data.(dataFields{ll})(data.(dataFields{ll})==-99)=nan;
+                end
+            end
         end
     end
 

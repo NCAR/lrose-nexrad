@@ -3,7 +3,7 @@
 clear all;
 close all;
 
-addpath(genpath('~/git/lrose-test/bomb_snowstorm/analysis/utils/'));
+addpath(genpath('~/git/lrose-nexrad/analysis/utils/'));
 
 maxRange=[];
 

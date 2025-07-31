@@ -1,9 +1,33 @@
-% Read and diplay radar data
+% Compare standard deviations
+% This script can read cfRadial files, fortran output tables from John, and nexrad level2 files.
+% It calculates spatial standard deviations and plots them.
+% It compares standard deviations from two files and calculates and plots
+% statistics.
+
+%% IMPORTANT
+
+% The files two input files need to be specified in the file
+% "compareFiles_cases2425.txt"
+% Each line in this file needs to have the following columns:
+% 1. Full path to data file 1
+% 2. Full path to data file 2
+% 3. Desired output name (will be used for directory and output file name)
+% 4.-7. X and Y coordinates of first zoom window
+% 8.-11. X and Y coordinates of second zoom window
+% 12. "table" or "nc" indicating the data file type of file 1
+% 13. "table" or "nc" indicating the data file type of file 1
+% 14. Seems to be not used. Not sure why it is there.
+% 15. Elevation angle
+
+% I suggest continuing the list of files instead of deleting. This way old
+% work can be recreated. You can start the foor loop at the desired new
+% file.
+%%
 
 clear all;
 close all;
 
-addpath(genpath('~/git/lrose-test/bomb_snowstorm/analysis/utils/'));
+addpath(genpath('~/git/lrose-nexrad/analysis/utils/'));
 
 minMaxRangeOrig=[]; % Range interval [min,max] or leave empty
 minMaxAz=[]; % Azimuth interval [min,max] or leave empty
@@ -11,12 +35,10 @@ kernel=[9,5]; % Az and range of std kernel. Default: [9,5]
 
 censorOnDBZ=0;
 censorOnVEL=0;
-censorOnCMD=0;
+censorOnCMD=1;
 censorOnTRIP=0; % Only use weak trip (0).
 %%%%%%%%%%%%%%
-tripToSnr=0; % The last (10th) variable that is read in John's files is TRIP. Sometimes it is actually SNR.
 censorOnSNR=[]; % Set to empty if not used !!!!!!! Only use areas with SNR above XX dB
-tripToCnr=0; % The last (10th) variable that is read in John's files is TRIP. Sometimes it is actually CNR.
 %%%%%%%%%%%%%%
 halfNyquist=0; % In some files the nyquist needs to be divided by 2
 removeZeros=0;
@@ -29,8 +51,9 @@ fclose(fileID);
 
 showPlot='on';
 
-for aa=42:size(inAll{1,1},1)
-%for aa=13:32
+censor99=1; % 1 if -99 values in John's tables should be converted to nans. Otherwise 0.
+
+for aa=53:size(inAll{1,1},1)
 
     nyquist=[];
 
@@ -106,13 +129,14 @@ for aa=42:size(inAll{1,1},1)
         data1in=readDataTables(infile1{:},' ');
         %data1in.azimuth=round(data1in.azimuth);
         data1in.RHOHV_F=data1in.RHOHV_NNC_F;
-        if tripToSnr
-            data1in.SNR=data1in.TRIP;
-            data1in=rmfield(data1in,'TRIP');
-        end
-        if tripToCnr
-            data1in.CNR=data1in.TRIP;
-            data1in=rmfield(data1in,'TRIP');
+
+        if censor99
+            dataFields=fields(data1in);
+            for ll=1:length(dataFields)
+                if size(data1in.(dataFields{ll}),1)==length(data1in.azimuth) & size(data1in.(dataFields{ll}),2)==length(data1in.range)
+                    data1in.(dataFields{ll})(data1in.(dataFields{ll})==-99)=nan;
+                end
+            end
         end
     end
 
@@ -148,7 +172,7 @@ for aa=42:size(inAll{1,1},1)
         data2in.PHIDP=[];
         data2in.RHOHV=[];
 
-        data1in=read_spol(infile2{:},data2in);
+        data2in=read_spol(infile2{:},data2in);
         nyquist=ncread(infile2{:},'nyquist_velocity');
 
         data2in=data2in(inAll{1,15}(aa));
@@ -185,15 +209,16 @@ for aa=42:size(inAll{1,1},1)
     elseif strcmp(fileType{:},'table')
         data2in=readDataTables(infile2{:},' ');
         %data2in.azimuth=round(data2in.azimuth);
-        if tripToSnr
-            data2in.SNR=data2in.TRIP;
-            data2in=rmfield(data2in,'TRIP');
-        end
-        if tripToCnr
-            data2in.CNR=data2in.TRIP;
-            data2in=rmfield(data2in,'TRIP');
-        end
         data2in.RHOHV_F=data2in.RHOHV_NNC_F;
+
+        if censor99
+            dataFields=fields(data2in);
+            for ll=1:length(dataFields)
+                if size(data2in.(dataFields{ll}),1)==length(data2in.azimuth) & size(data2in.(dataFields{ll}),2)==length(data2in.range)
+                    data2in.(dataFields{ll})(data2in.(dataFields{ll})==-99)=nan;
+                end
+            end
+        end
     elseif strcmp(fileType{:},'mat')
         load(infile2{:});
         addnan=nan(size(data.REF,1),8);
