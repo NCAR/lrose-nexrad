@@ -53,7 +53,7 @@ showPlot='on';
 
 censor99=1; % 1 if -99 values in John's tables should be converted to nans. Otherwise 0.
 
-for aa=53:size(inAll{1,1},1)
+for aa=71:size(inAll{1,1},1)
 
     nyquist=[];
 

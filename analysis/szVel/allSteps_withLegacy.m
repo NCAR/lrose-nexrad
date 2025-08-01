@@ -1,13 +1,21 @@
-% Read and diplay radar data
+% This script uses regression processed files from John, and VRAD processed
+% and level 2 data from David.
+% It plots the input data and fills in the VRAD processed data around the
+% edges with censored regression data.
+% It calculates spatial standard deviations and some statistics.
 
 clear all;
 close all;
 
-addpath(genpath('~/git/lrose-test/bomb_snowstorm/analysis/'));
+addpath(genpath('~/git/lrose-nexrad/analysis/'));
 
-showPlot='on';
-%radar='KFTG';
-radar='KLWX';
+showPlot='on'; % 
+
+% Set desired radar case
+radar='KFTG';
+%radar='KLWX';
+%radar='KBOX';
+%radar='KBGM';
 
 figdir=['/scr/cirrus1/rsfdata/projects/nexrad/figures/szComp/',radar,'/'];
 
@@ -23,6 +31,7 @@ if strcmp(radar,'KFTG')
     xlimits2=[50,150];
     ylimits2=[70,170];
     censThreshStd=7;
+    flipLev2=0;
 elseif strcmp(radar,'KLWX')
     regFile='/scr/cirrus1/rsfdata/projects/nexrad/tables/DOPklwx20230807_220627.txt';
     regVradFile='/scr/cirrus1/rsfdata/projects/nexrad/matFiles/KLWX_Regression_and_VRAD_Filt_12.mat';
@@ -32,6 +41,27 @@ elseif strcmp(radar,'KLWX')
     xlimits2=[50,170];
     ylimits2=[60,180];
     censThreshStd=7;
+    flipLev2=0;
+elseif strcmp(radar,'KBOX')
+    regFile='/scr/cirrus1/rsfdata/projects/nexrad/tables/KBOX-DOPPLER20240508_131424_0.48_95.63.32PT.txt';
+    regVradFile='/scr/cirrus1/rsfdata/projects/nexrad/matFiles/KBOX_Regression_and_VRAD_Filt_10.mat';
+    vradLegFile='/scr/cirrus1/rsfdata/projects/nexrad/matFiles/KBOX_VRAD_Legacy.mat';
+    xlimits1=[-250,200];
+    ylimits1=[-200,300];
+    xlimits2=[0,200];
+    ylimits2=[60,220];
+    censThreshStd=7;
+    flipLev2=1;
+elseif strcmp(radar,'KBGM')
+    regFile='/scr/cirrus1/rsfdata/projects/nexrad/tables/KBGMdoppler20181109_183814_0.48_36.08.32pt.txt';
+    regVradFile='/scr/cirrus1/rsfdata/projects/nexrad/matFiles/KBGM_Regression_and_VRAD_Filt_12.mat';
+    vradLegFile='/scr/cirrus1/rsfdata/projects/nexrad/matFiles/KBGM_VRAD_Legacy.mat';
+    xlimits1=[-250,250];
+    ylimits1=[-250,250];
+    xlimits2=[-250,200];
+    ylimits2=[-200,290];
+    censThreshStd=6;
+    flipLev2=1;
 end
 
 %% Read regressino data
@@ -46,17 +76,7 @@ vradLegIn=load(vradLegFile);
 
 %% Match azimuths
 
-azRes=round((regIn.azimuth(2)-regIn.azimuth(1))*10)/10;
-% if azRes==0.5
-%     pastDot=data1in.azimuth(1)-floor(data1in.azimuth(1));
-%     if (pastDot>=0.2 & pastDot<=0.3) | (pastDot>=0.7 & pastDot<=0.8)
-%         allAz=0.25:azRes:360;
-%     else
-%         allAz=0.5:azRes:360;
-%     end
-% else
-    allAz=0:360;
-% end
+allAz=0:360;
 
 ib1=[];
 ib2=[];
@@ -66,12 +86,10 @@ for kk=1:length(allAz)
     [minDiff1,minInd1]=min(abs(regIn.azimuth-allAz(kk)));
     [minDiff2,minInd2]=min(abs(regVradIn.az-allAz(kk)));
     [minDiff3,minInd3]=min(abs(vradLegIn.az-allAz(kk)));
-    %if minDiff1<azRes/2+0.01 & minDiff2<azRes/2+0.01
-        ib1=cat(1,ib1,minInd1);
-        ib2=cat(1,ib2,minInd2);
-        ib3=cat(1,ib3,minInd3);
-        ibAll=cat(1,ibAll,kk);
-    %end
+    ib1=cat(1,ib1,minInd1);
+    ib2=cat(1,ib2,minInd2);
+    ib3=cat(1,ib3,minInd3);
+    ibAll=cat(1,ibAll,kk);
 end
 
 reg=[];
@@ -92,13 +110,12 @@ vradInT=(regVradIn.v1)';
 regInVrad.VEL=nan(length(allAz),size(vradInT,2));
 regInVrad.VEL(ibAll,:)=vradInT(ib2,:);
 % Level 2
-% ovl=flipud(vradLegIn.ovl);
-% ovl(ovl==1)=nan;
-% ovl(ovl==0)=1;
+vradLegIn.v1(vradLegIn.ovl==1)=nan;
 lev2T=flipud((vradLegIn.v1.*vradLegIn.thr)');
 lev2.VEL=nan(length(allAz),size(lev2T,2));
 lev2.VEL(ibAll,:)=lev2T(ib3,:);
 lev2.VEL(isinf(lev2.VEL))=nan;
+
 % VRAD legacy
 vradLegIn.vt=flipud((vradLegIn.vrad.*vradLegIn.thr)');
 vradLeg.VEL=nan(length(allAz),size(vradLegIn.vt,2));
@@ -143,6 +160,11 @@ angMat=repmat(ang_p',size(reg.range,1),1);
 XX = (reg.range.*cos(angMat));
 YY = (reg.range.*sin(angMat));
 
+if flipLev2
+    lev2.VEL=flipud(lev2.VEL);
+    vradLeg.VEL=flipud(vradLeg.VEL);
+end
+
 %% Plot
 
 close all
@@ -154,7 +176,7 @@ t = tiledlayout(2,3,'TileSpacing','tight','Padding','tight');
 % NEXRAD level 2
 s1=nexttile(1);
 
-h1=surf(XX,YY,lev2.VEL,'edgecolor','none');
+h1=surf(XX(1:size(lev2.VEL,1),1:size(lev2.VEL,2)),YY(1:size(lev2.VEL,1),1:size(lev2.VEL,2)),lev2.VEL,'edgecolor','none');
 view(2);
 title('VEL NEXRAD level 2 (m s^{-1})');
 xlabel('km');
@@ -189,7 +211,8 @@ daspect(s2,[1 1 1]);
 
 % Regression censored
 s3=nexttile(3);
-regCensoredVRAD=regInVrad.VEL;
+%regCensoredVRAD=regInVrad.VEL;
+regCensoredVRAD=regCensored;
 h1=surf(XX,YY,regCensoredVRAD,'edgecolor','none');
 view(2);
 title('VEL regression censored (m s^{-1})');
@@ -208,7 +231,7 @@ daspect(s3,[1 1 1]);
 % VRAD legacy
 s4=nexttile(4);
 
-h1=surf(XX,YY,vradLeg.VEL,'edgecolor','none');
+h1=surf(XX(1:size(vradLeg.VEL,1),1:size(vradLeg.VEL,2)),YY(1:size(vradLeg.VEL,1),1:size(vradLeg.VEL,2)),vradLeg.VEL,'edgecolor','none');
 view(2);
 title('VEL VRAD NEXRAD level 2 (m s^{-1})');
 xlabel('km');
@@ -330,7 +353,7 @@ t = tiledlayout(3,3,'TileSpacing','tight','Padding','compact');
 % NEXRAD level 2
 s1=nexttile(1);
 
-h1=surf(XX,YY,stdLev2,'edgecolor','none');
+h1=surf(XX(1:size(stdLev2,1),1:size(stdLev2,2)),YY(1:size(stdLev2,1),1:size(stdLev2,2)),stdLev2,'edgecolor','none');
 view(2);
 s1.Colormap=jet;
 clim(stdLims);
@@ -349,7 +372,7 @@ daspect(s1,[1 1 1]);
 s2=nexttile(2);
 vradMinLev2=stdVradLegClev2-stdLev2;
 
-h1=surf(XX,YY,vradMinLev2,'edgecolor','none');
+h1=surf(XX(1:size(vradMinLev2,1),1:size(vradMinLev2,2)),YY(1:size(vradMinLev2,1),1:size(vradMinLev2,2)),vradMinLev2,'edgecolor','none');
 view(2);
 s2.Colormap=velCols;
 clim(diffLims);
@@ -388,7 +411,7 @@ title('St. dev. VRAD - St. dev. level 2 (m s^{-1})');
 % VRAD
 s4=nexttile(4);
 
-h1=surf(XX,YY,stdVradLeg,'edgecolor','none');
+h1=surf(XX(1:size(stdVradLeg,1),1:size(stdVradLeg,2)),YY(1:size(stdVradLeg,1),1:size(stdVradLeg,2)),stdVradLeg,'edgecolor','none');
 view(2);
 s4.Colormap=jet;
 clim(stdLims);
@@ -405,9 +428,9 @@ ylim(ylimits1)
 daspect(s4,[1 1 1]);
 
 s5=nexttile(5);
-vradRegMinVrad=stdVradRegVrad-stdVradLeg;
+vradRegMinVrad=stdVradRegVrad(1:size(stdVradLeg,1),1:size(stdVradLeg,2))-stdVradLeg;
 
-h1=surf(XX,YY,vradRegMinVrad,'edgecolor','none');
+h1=surf(XX(1:size(vradRegMinVrad,1),1:size(vradRegMinVrad,2)),YY(1:size(vradRegMinVrad,1),1:size(vradRegMinVrad,2)),vradRegMinVrad,'edgecolor','none');
 view(2);
 s5.Colormap=velCols;
 clim(diffLims);
@@ -463,9 +486,9 @@ ylim(ylimits1)
 daspect(s7,[1 1 1]);
 
 s8=nexttile(8);
-vradRegMinLev2=stdVradRegClev2-stdLev2;
+vradRegMinLev2=stdVradRegClev2(1:size(stdLev2,1),1:size(stdLev2,2))-stdLev2;
 
-h1=surf(XX,YY,vradRegMinLev2,'edgecolor','none');
+h1=surf(XX(1:size(vradRegMinLev2,1),1:size(vradRegMinLev2,2)),YY(1:size(vradRegMinLev2,1),1:size(vradRegMinLev2,2)),vradRegMinLev2,'edgecolor','none');
 view(2);
 s8.Colormap=velCols;
 clim(diffLims);
